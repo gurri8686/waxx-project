@@ -1,18 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import CryptoJS from "crypto-js";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
 
-// Main component wrapped in Suspense for useSearchParams
 function DeviceInfoContent() {
   const searchParams = useSearchParams();
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [responseData, setResponseData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [statusMessage, setStatusMessage] = useState("Reading NFC tag...");
+  const [error, setError] = useState<string | null>(null);
 
   // Generate nonce
   function generateNonce(length: number) {
@@ -50,7 +48,7 @@ function DeviceInfoContent() {
 
   const callApi = async (mac: string) => {
     setLoading(true);
-    setStatusMessage("Fetching device info...");
+    setError(null);
 
     const timestamp = Date.now().toString();
     const nonce = generateNonce(16);
@@ -79,35 +77,34 @@ function DeviceInfoContent() {
 
       const json = await res.json();
       setResponseData(json);
-      setStatusMessage("");
     } catch (e: any) {
-      setResponseData({ error: e.toString() });
-      setStatusMessage("Error fetching device info");
+      setError("Failed to fetch device info. Please try again.");
+      setResponseData(null);
     }
 
     setLoading(false);
   };
 
-  // Check URL for device ID on page load (works when NFC tag opens this URL)
+  // Read device ID from URL and fetch info automatically
   useEffect(() => {
-    // Check multiple possible URL parameter names
-    const idFromUrl = 
-      searchParams.get("id") || 
-      searchParams.get("deviceId") || 
+    const idFromUrl =
+      searchParams.get("id") ||
+      searchParams.get("deviceId") ||
       searchParams.get("deviceMac") ||
       searchParams.get("mac");
-    
+
     if (idFromUrl) {
-      setDeviceId(idFromUrl.toUpperCase());
-      callApi(idFromUrl);
+      const id = idFromUrl.toUpperCase();
+      setDeviceId(id);
+      callApi(id);
     } else {
+      setDeviceId(null);
       setLoading(false);
-      setStatusMessage("");
     }
   }, [searchParams]);
 
-  // No device ID in URL - show instruction to scan NFC
-  if (!deviceId && !loading) {
+  // No device ID - show scan instruction
+  if (!deviceId) {
     return (
       <div className="min-h-screen bg-[#1a1a1a] flex flex-col items-center justify-center p-6">
         <div className="flex flex-col items-center max-w-md w-full">
@@ -158,9 +155,9 @@ function DeviceInfoContent() {
     );
   }
 
+  // Show device info
   return (
     <div className="min-h-screen bg-[#1a1a1a] flex flex-col items-center justify-center p-6">
-      {/* Main content */}
       <div className="flex flex-col items-center max-w-md w-full">
         {/* Logo */}
         <div className="mb-12">
@@ -179,23 +176,23 @@ function DeviceInfoContent() {
             Device Info
           </h1>
 
-          {/* Loading State */}
+          {/* Loading */}
           {loading && (
             <div className="flex flex-col items-center py-8">
               <div className="w-10 h-10 border-3 border-[#F5C518]/30 border-t-[#F5C518] rounded-full animate-spin mb-4" />
-              <p className="text-gray-400 text-sm">{statusMessage}</p>
+              <p className="text-gray-400 text-sm">Loading device info...</p>
             </div>
           )}
 
-          {/* Error Message */}
-          {statusMessage && !loading && (
-            <div className="text-center mb-4">
-              <p className="text-red-400 text-sm">{statusMessage}</p>
+          {/* Error */}
+          {error && !loading && (
+            <div className="text-center py-4">
+              <p className="text-red-400 text-sm">{error}</p>
             </div>
           )}
 
-          {/* Device ID Display */}
-          {deviceId && !loading && (
+          {/* Device ID */}
+          {!loading && (
             <div className="mb-4 p-4 bg-[#1a1a1a] rounded-xl border border-[#333]">
               <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">
                 Device ID
@@ -206,7 +203,7 @@ function DeviceInfoContent() {
             </div>
           )}
 
-          {/* Device Info Display */}
+          {/* Device Info */}
           {responseData && !loading && (
             <div>
               <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">
@@ -232,12 +229,11 @@ function DeviceInfoContent() {
 function LoadingFallback() {
   return (
     <div className="min-h-screen bg-[#1a1a1a] flex flex-col items-center justify-center p-6">
-      <div className="w-8 h-8 border-2 border-[#F5C518]/30 border-t-[#F5C518] rounded-full animate-spin" />
+      <div className="w-10 h-10 border-3 border-[#F5C518]/30 border-t-[#F5C518] rounded-full animate-spin" />
     </div>
   );
 }
 
-// Export with Suspense wrapper
 export default function Page() {
   return (
     <Suspense fallback={<LoadingFallback />}>
